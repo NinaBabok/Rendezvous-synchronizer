@@ -116,17 +116,23 @@ export interface SearchFilterState {
   tripDurationDays: number; // 3, 4, 5, 7
 }
 
+export interface GroundingSource {
+  title: string;
+  url: string;
+}
+
+export type ConciergeSuggestedAction =
+  | { type: 'select_date'; payload: string; label: string }
+  | { type: 'switch_destination'; payload: DestinationCity; label: string }
+  | { type: 'filter_direct'; payload: boolean; label: string };
+
 export interface AIConciergeMessage {
   id: string;
   sender: 'user' | 'assistant';
   text: string;
   timestamp: string;
-  groundingSources?: Array<{ title: string; url: string }>;
-  suggestedAction?: {
-    type: 'select_date' | 'switch_destination' | 'filter_direct';
-    payload: any;
-    label: string;
-  };
+  groundingSources?: GroundingSource[];
+  suggestedAction?: ConciergeSuggestedAction;
 }
 
 export interface ParsedTripIntent {

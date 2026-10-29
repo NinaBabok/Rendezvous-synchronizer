@@ -27,8 +27,8 @@ interface TripSummaryProps {
   onGoToReturnTab?: () => void;
   onGoToOutboundTab?: () => void;
   onGoToHomeTab: () => void;
-  outboundMatch?: SynchronizedMatch | null;
-  returnMatch?: SynchronizedMatch | null;
+  outboundMatch?: SynchronizedMatch | null | undefined;
+  returnMatch?: SynchronizedMatch | null | undefined;
   onSelectQuickReturnDate?: (date: string) => void;
   activeDirection?: 'outbound' | 'return';
 }

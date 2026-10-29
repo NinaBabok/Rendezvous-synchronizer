@@ -3,7 +3,7 @@ import { Sparkles, DollarSign, HelpCircle, ExternalLink, ShieldCheck } from 'luc
 
 declare global {
   interface Window {
-    adsbygoogle?: any[];
+    adsbygoogle?: Array<Record<string, unknown>>;
   }
 }
 
@@ -21,9 +21,9 @@ export const GoogleAdSenseBanner: React.FC<GoogleAdSenseBannerProps> = ({
   onOpenAdSenseGuide,
 }) => {
   const [adClient, setAdClient] = useState<string>(() => {
-    const envClientId = (import.meta as any).env?.VITE_ADSENSE_CLIENT_ID;
+    const envClientId = import.meta.env.VITE_ADSENSE_CLIENT_ID;
     return (
-      (envClientId as string) ||
+      envClientId ||
       localStorage.getItem('adsense_client_id') ||
       ''
     );

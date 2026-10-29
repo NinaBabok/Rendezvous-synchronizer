@@ -18,7 +18,7 @@ interface AirportTransitGuideProps {
   destinationName?: string;
   traveler1Origin?: string;
   traveler2Origin?: string;
-  currentOutboundMatch?: SynchronizedMatch;
+  currentOutboundMatch?: SynchronizedMatch | undefined;
   onSelectDestination: (city: DestinationCity, customName?: string) => void;
 }
 
@@ -34,11 +34,11 @@ export const AirportTransitGuide: React.FC<AirportTransitGuideProps> = ({
 
   const t1Full = traveler1Origin?.trim() || 'Traveler 1 City';
   const t2Full = traveler2Origin?.trim() || 'Traveler 2 City';
-  const t1Short = t1Full.split(' (')[0];
-  const t2Short = t2Full.split(' (')[0];
+  const t1Short = t1Full.split(' (')[0] ?? t1Full;
+  const t2Short = t2Full.split(' (')[0] ?? t2Full;
 
   const rawDestName = destinationName?.trim() || cityData.name;
-  const destShort = rawDestName.split(' (')[0];
+  const destShort = rawDestName.split(' (')[0] ?? rawDestName;
 
   // Look up custom city in POPULAR_CITIES
   const matchedCityMeta = POPULAR_CITIES.find(

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Search, Loader2, ExternalLink, Plane, CheckCircle2 } from 'lucide-react';
 import { DestinationCity } from '../types';
+import { isGroundingSource, isRecord } from '../utils';
+import { searchLiveFlights } from '../gemini';
 
 interface LiveFlightSearchModalProps {
   isOpen: boolean;
@@ -26,27 +28,23 @@ export const LiveFlightSearchModal: React.FC<LiveFlightSearchModalProps> = ({
     setResult(null);
 
     try {
-      const res = await fetch('/api/flight-sync/ai-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          destinationCity,
-          travelDate: selectedDate || 'October 2026',
-          userQuery: q || `Analyze flight schedules for Zagreb (ZAG) and Toulouse (TLS) to ${destinationCity === 'milano' ? 'Milan (BGY/MXP)' : 'Rome (FCO)'} in October with synchronized meeting options and direct airlines.`,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success && data.analysis) {
+      const data = await searchLiveFlights(
+        destinationCity,
+        selectedDate || 'October 2026',
+        q || `Analyze flight schedules for Zagreb (ZAG) and Toulouse (TLS) to ${destinationCity === 'milano' ? 'Milan (BGY/MXP)' : 'Rome (FCO)'} in October with synchronized meeting options and direct airlines.`,
+      );
+      if (isRecord(data) && data.success === true && typeof data.analysis === 'string') {
         setResult(data.analysis);
-        setSources(data.sources || []);
+        setSources(Array.isArray(data.sources) ? data.sources.filter(isGroundingSource) : []);
       } else {
+        const errorMessage =
+          isRecord(data) && typeof data.error === 'string' ? data.error : 'Check environment';
         setResult(
-          `Could not fetch live search results. (Error: ${data.error || 'Check environment'}). In the meantime, explore the October schedules database in the application.`
+          `Could not fetch live search results. (Error: ${errorMessage}). In the meantime, explore the October schedules database in the application.`
         );
       }
-    } catch (err: any) {
-      setResult('Network error while running live search. Please try again.');
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : 'Gemini search failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

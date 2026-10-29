@@ -1,3 +1,17 @@
+import type { GroundingSource } from './types';
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function isGroundingSource(value: unknown): value is GroundingSource {
+  return (
+    isRecord(value) &&
+    typeof value.title === 'string' &&
+    typeof value.url === 'string'
+  );
+}
+
 /**
  * Formats a duration in minutes into a human-readable string.
  * - From 60 min, writes in hours like "1 hr" or "1 hr 40 min" (e.g. 110 min -> "1 hr 50 min").

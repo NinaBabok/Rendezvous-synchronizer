@@ -48,8 +48,9 @@ export const RendezvousMatrix: React.FC<RendezvousMatrixProps> = ({
   // Compute leading empty cells based on the weekday of the 1st of this month
   const targetCityMatches = matches.filter((m) => m.destinationCity === destinationCity);
   const leadingOffsetCells = React.useMemo(() => {
-    if (!targetCityMatches.length) return 0;
-    const firstDateObj = new Date(targetCityMatches[0].date);
+    const firstMatch = targetCityMatches[0];
+    if (!firstMatch) return 0;
+    const firstDateObj = new Date(firstMatch.date);
     const jsDay = firstDateObj.getDay(); // 0 is Sun, 1 is Mon...
     return (jsDay + 6) % 7; // 0 for Mon, 1 for Tue, ... 6 for Sun
   }, [targetCityMatches]);
@@ -218,8 +219,8 @@ export const RendezvousMatrix: React.FC<RendezvousMatrixProps> = ({
           {matches
             .filter((m) => m.destinationCity === destinationCity)
             .map((match) => {
-              const dayNum = parseInt(match.date.split('-')[2], 10);
               const dateObj = new Date(match.date);
+              const dayNum = dateObj.getDate();
 
               // Monday is index 0 in dayNames
               const jsDay = dateObj.getDay(); // 0 is Sun, 1 is Mon...

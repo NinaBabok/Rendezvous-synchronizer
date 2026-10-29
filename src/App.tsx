@@ -27,7 +27,9 @@ import { TripSummary } from './components/TripSummary';
 import { BookingRoleExplainer } from './components/BookingRoleExplainer';
 import { AdvertiseModal } from './components/AdvertiseModal';
 import { GoogleAdSenseBanner } from './components/GoogleAdSenseBanner';
+import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
 import { formatMinutesDiff } from './utils';
+import { getGeminiApiKey, removeGeminiApiKey, saveGeminiApiKey } from './gemini';
 import { 
   Sparkles, 
   MapPin, 
@@ -52,6 +54,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [isTipModalOpen, setIsTipModalOpen] = useState<boolean>(false);
   const [isAdvertiseOpen, setIsAdvertiseOpen] = useState<boolean>(false);
+  const [geminiApiKey, setGeminiApiKey] = useState(() => getGeminiApiKey());
+  const [isGeminiApiKeyModalOpen, setIsGeminiApiKeyModalOpen] = useState(false);
 
   // Filters for Outbound
   const [filterDirectOnly, setFilterDirectOnly] = useState<boolean>(false);
@@ -169,6 +173,8 @@ export default function App() {
           setConciergeInitialPrompt('');
           setIsConciergeOpen(true);
         }}
+        onOpenApiKeySettings={() => setIsGeminiApiKeyModalOpen(true)}
+        hasGeminiApiKey={Boolean(geminiApiKey)}
         onOpenLiveSearch={() => setIsLiveSearchOpen(true)}
         onOpenTipModal={() => setIsTipModalOpen(true)}
         activeTab={activeTab}
@@ -785,6 +791,22 @@ export default function App() {
         onClose={() => setIsLiveSearchOpen(false)}
         destinationCity={destinationCity}
         selectedDate={activeTab === 'return' ? selectedReturnDate : selectedOutboundDate}
+      />
+
+      <GeminiApiKeyModal
+        isOpen={isGeminiApiKeyModalOpen}
+        apiKey={geminiApiKey}
+        onClose={() => setIsGeminiApiKeyModalOpen(false)}
+        onSave={(apiKey) => {
+          saveGeminiApiKey(apiKey);
+          setGeminiApiKey(apiKey);
+          setIsGeminiApiKeyModalOpen(false);
+        }}
+        onRemove={() => {
+          removeGeminiApiKey();
+          setGeminiApiKey('');
+          setIsGeminiApiKeyModalOpen(false);
+        }}
       />
 
       <ShareModal

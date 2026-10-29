@@ -97,6 +97,7 @@ export const DiscreetAdBanner: React.FC<DiscreetAdBannerProps> = ({
   }
 
   const deal = SPONSORED_DEALS[currentIndex];
+  if (!deal) return null;
 
   const handleCtaClick = (e: React.MouseEvent) => {
     e.preventDefault();

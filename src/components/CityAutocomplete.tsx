@@ -68,9 +68,11 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (highlightedIndex >= 0 && highlightedIndex < matches.length) {
-        handleSelectCity(matches[highlightedIndex]);
+        const highlightedMatch = matches[highlightedIndex];
+        if (highlightedMatch) handleSelectCity(highlightedMatch);
       } else if (matches.length > 0) {
-        handleSelectCity(matches[0]);
+        const firstMatch = matches[0];
+        if (firstMatch) handleSelectCity(firstMatch);
       }
     } else if (e.key === 'Escape') {
       setIsOpen(false);

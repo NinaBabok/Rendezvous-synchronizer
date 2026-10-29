@@ -82,6 +82,8 @@ export const AnimatedCountryText: React.FC<AnimatedCountryTextProps> = ({
   const currentIndex = useSynchronizedCountryIndex();
   const currentCountry = COUNTRIES[currentIndex];
 
+  if (!currentCountry) return null;
+
   const getThemeClass = () => {
     if (theme === 'dark') {
       return 'text-amber-400 font-bold';

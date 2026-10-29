@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, MapPin, Compass, PlaneTakeoff, PlaneLanding, Home, Coffee } from 'lucide-react';
+import { Sparkles, MapPin, Compass, PlaneTakeoff, PlaneLanding, Home, Coffee, KeyRound } from 'lucide-react';
 import { DestinationCity } from '../types';
 import { AnimatedCountryText } from './AnimatedCountryText';
 
@@ -13,6 +13,8 @@ interface HeaderProps {
   isDestinationChosen?: boolean;
   onSelectDestination: (city: DestinationCity) => void;
   onOpenAIConcierge: () => void;
+  onOpenApiKeySettings: () => void;
+  hasGeminiApiKey: boolean;
   onOpenLiveSearch: () => void;
   onOpenTipModal?: () => void;
   activeTab: AppTab;
@@ -27,6 +29,8 @@ export const Header: React.FC<HeaderProps> = ({
   isDestinationChosen = false,
   onSelectDestination,
   onOpenAIConcierge,
+  onOpenApiKeySettings,
+  hasGeminiApiKey,
   onOpenLiveSearch,
   onOpenTipModal,
   activeTab,
@@ -137,6 +141,19 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Floating Actions */}
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              id="header-gemini-api-key-btn"
+              onClick={onOpenApiKeySettings}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold transition-all shadow-xs cursor-pointer whitespace-nowrap ${
+                hasGeminiApiKey
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-200'
+                  : 'bg-white hover:bg-amber-50 text-stone-700 border-stone-300'
+              }`}
+              title="Manage your Gemini API key"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>API Key</span>
+            </button>
             <button
               id="header-ai-concierge-btn"
               onClick={onOpenAIConcierge}

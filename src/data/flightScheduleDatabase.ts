@@ -611,8 +611,9 @@ export function getMatchesForMonth(year: number = 2026, month: number = 10): Syn
 }
 
 function timeToMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
+  const [hours, minutes] = t.split(':');
+  if (hours === undefined || minutes === undefined) return Number.NaN;
+  return Number(hours) * 60 + Number(minutes);
 }
 
 function createSynchronizedMatch(

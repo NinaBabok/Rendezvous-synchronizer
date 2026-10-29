@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
     "target": "ES2022",
     "experimentalDecorators": true,
     "useDefineForClassFields": false,

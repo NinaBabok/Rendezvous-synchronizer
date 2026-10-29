@@ -3,7 +3,6 @@ import {
   Sparkles, 
   MapPin, 
   Calendar, 
-  Clock, 
   ArrowRight, 
   Users, 
   Heart, 
@@ -11,17 +10,17 @@ import {
   PlaneLanding, 
   CheckCircle2, 
   Compass, 
-  Search, 
-  ChevronRight,
-  ShieldCheck,
-  TrendingDown,
-  Layers,
   AlertCircle
 } from 'lucide-react';
 import { DestinationCity, ParsedTripIntent } from '../types';
+import { isRecord } from '../utils';
+import { parseTripIntent } from '../gemini';
 import { AnimatedCountryText } from './AnimatedCountryText';
 import { getProposedBestDatesForDestination, ProposedTripDate } from '../data/flightScheduleDatabase';
-import { CityAutocomplete } from './CityAutocomplete';
+import type { CityItem } from '../data/cities';
+import { FeaturedRendezvousIdeas } from './FeaturedRendezvousIdeas';
+import { TripRequestForm } from './TripRequestForm';
+import { ParsedTripResultCard } from './ParsedTripResultCard';
 
 interface HomePageProps {
   onStartPlanning: (
@@ -103,17 +102,16 @@ export const HomePage: React.FC<HomePageProps> = ({
     setValidationError(null);
 
     try {
-      const res = await fetch('/api/parse-trip-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ naturalLanguageQuery: queryToUse }),
-      });
-
-      const data = await res.json();
-      if (data.success && data.data) {
-        const detectedCity = data.data.destinationCity === 'roma' ? 'roma' : 'milano';
-        const t1 = data.data.traveler1Origin || 'Toulouse (TLS)';
-        const t2 = data.data.traveler2Origin || 'Zagreb (ZAG)';
+      const data = await parseTripIntent(queryToUse);
+      if (isRecord(data) && data.success === true && isRecord(data.data)) {
+        const parsedData = data.data;
+        const detectedCity: DestinationCity = parsedData.destinationCity === 'roma' ? 'roma' : 'milano';
+        const t1 = typeof parsedData.traveler1Origin === 'string'
+          ? parsedData.traveler1Origin
+          : 'Toulouse (TLS)';
+        const t2 = typeof parsedData.traveler2Origin === 'string'
+          ? parsedData.traveler2Origin
+          : 'Zagreb (ZAG)';
         
         setOrigin1(t1);
         setOrigin2(t2);
@@ -128,11 +126,15 @@ export const HomePage: React.FC<HomePageProps> = ({
           destinationCity: detectedCity,
           month: 'October 2026',
           tripType: 'roundtrip',
-          durationDays: data.data.durationDays || 4,
-          outboundDate: data.data.outboundDate || '2026-10-15',
-          returnDate: data.data.returnDate || '2026-10-18',
-          summary: data.data.summary || `Synchronized flight rendezvous from ${t1} and ${t2} to ${detectedCity === 'milano' ? 'Milan' : 'Rome'}.`,
-          whyThisTrip: data.data.whyThisTrip || 'Direct flight options aligned for tight arrival and return departure windows.',
+          durationDays: typeof parsedData.durationDays === 'number' ? parsedData.durationDays : 4,
+          outboundDate: typeof parsedData.outboundDate === 'string' ? parsedData.outboundDate : '2026-10-15',
+          returnDate: typeof parsedData.returnDate === 'string' ? parsedData.returnDate : '2026-10-18',
+          summary: typeof parsedData.summary === 'string'
+            ? parsedData.summary
+            : `Synchronized flight rendezvous from ${t1} and ${t2} to ${detectedCity === 'milano' ? 'Milan' : 'Rome'}.`,
+          whyThisTrip: typeof parsedData.whyThisTrip === 'string'
+            ? parsedData.whyThisTrip
+            : 'Direct flight options aligned for tight arrival and return departure windows.',
           directOutboundAvailable: true,
           directReturnAvailable: true,
         });
@@ -187,6 +189,9 @@ export const HomePage: React.FC<HomePageProps> = ({
         });
       }
     } catch (err) {
+      setValidationError(
+        `${err instanceof Error ? err.message : 'Gemini could not parse this request.'} Using the built-in trip parser instead.`,
+      );
       // Local fallback
       const isRome = queryToUse.toLowerCase().includes('rome') || queryToUse.toLowerCase().includes('roma');
       const city: DestinationCity = isRome ? 'roma' : 'milano';
@@ -264,7 +269,7 @@ export const HomePage: React.FC<HomePageProps> = ({
     } else if (!effectiveReturn || effectiveReturn <= effectiveOutbound) {
       const d = new Date(effectiveOutbound);
       d.setDate(d.getDate() + 3);
-      effectiveReturn = d.toISOString().split('T')[0];
+      effectiveReturn = d.toISOString().slice(0, 10);
       setReturnDate(effectiveReturn);
     }
 
@@ -275,6 +280,80 @@ export const HomePage: React.FC<HomePageProps> = ({
     const meetingName = destInput || (destination === 'roma' ? 'Rome' : 'Milan');
 
     onStartPlanning(destination, effectiveOutbound, effectiveReturn, origin1.trim(), origin2.trim(), meetingName);
+  };
+
+  const handleSelectSuggestedTrip = (
+    destination: DestinationCity,
+    suggestedOutboundDate: string,
+    suggestedReturnDate: string,
+  ) => {
+    setSelectedCity(destination);
+    onSetTravelerOrigins?.(origin1, origin2);
+    onStartPlanning(destination, suggestedOutboundDate, suggestedReturnDate, origin1, origin2);
+  };
+
+  const handleOrigin1Change = (value: string) => {
+    setOrigin1(value);
+    onSetTravelerOrigins?.(value, origin2);
+    if (validationError) setValidationError(null);
+  };
+
+  const handleOrigin2Change = (value: string) => {
+    setOrigin2(value);
+    onSetTravelerOrigins?.(origin1, value);
+    if (validationError) setValidationError(null);
+  };
+
+  const handleDestinationChange = (value: string, cityItem?: CityItem) => {
+    setCustomDestinationText(value);
+    if (!value.trim()) {
+      setSelectedCity('');
+      onUpdateDestination?.('', '');
+    } else {
+      const destinationSearchText = `${cityItem?.city ?? ''} ${value}`.toLowerCase();
+      const nextCity: DestinationCity =
+        destinationSearchText.includes('rome') ||
+        destinationSearchText.includes('roma') ||
+        destinationSearchText.includes('fco')
+          ? 'roma'
+          : 'milano';
+      setSelectedCity(nextCity);
+      onUpdateDestination?.(value, nextCity);
+    }
+    if (validationError) setValidationError(null);
+  };
+
+  const handleOutboundDateChange = (value: string) => {
+    setOutboundDate(value);
+    if (returnDate && value >= returnDate) {
+      const nextReturnDate = new Date(value);
+      nextReturnDate.setDate(nextReturnDate.getDate() + 3);
+      setReturnDate(nextReturnDate.toISOString().slice(0, 10));
+    }
+    if (validationError) setValidationError(null);
+  };
+
+  const handleReturnDateChange = (value: string) => {
+    setReturnDate(value);
+    if (validationError) setValidationError(null);
+  };
+
+  const handleApplyProposedDates = () => {
+    if (!proposedBestDate) return;
+    setOutboundDate(proposedBestDate.outboundDate);
+    setReturnDate(proposedBestDate.returnDate);
+    if (validationError) setValidationError(null);
+  };
+
+  const handleOpenParsedStep = (result: ParsedTripIntent, step: 'outbound' | 'return') => {
+    onStartPlanning(
+      result.destinationCity,
+      result.outboundDate,
+      result.returnDate,
+      result.traveler1Origin,
+      result.traveler2Origin,
+    );
+    if (step === 'return') onNavigateToTab('return');
   };
 
   return (
@@ -306,514 +385,54 @@ export const HomePage: React.FC<HomePageProps> = ({
             ? Enter your departure cities and meeting destination below to find flights that land together and return together.
           </p>
 
-          {/* ======================= DIRECT ROUTE INPUT BOX ======================= */}
-          <div className="pt-4 max-w-3xl mx-auto text-left">
-            <div className="rounded-3xl bg-white/95 backdrop-blur-md border border-[#E2D2C2] p-5 sm:p-7 shadow-xl shadow-stone-900/5 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Traveler 1 Input */}
-                <div>
-                  <CityAutocomplete
-                    id="input-origin-1"
-                    label="Traveler 1 (Your Departure City)"
-                    icon={<PlaneTakeoff className="w-3.5 h-3.5 text-orange-600" />}
-                    value={origin1}
-                    placeholder="e.g. Paris"
-                    datalistId="origin1-datalist"
-                    onChange={(val) => {
-                      setOrigin1(val);
-                      if (onSetTravelerOrigins) onSetTravelerOrigins(val, origin2);
-                      if (validationError) setValidationError(null);
-                    }}
-                  />
-                </div>
+          <TripRequestForm
+            state={{
+              origin1,
+              origin2,
+              destinationText: customDestinationText,
+              outboundDate,
+              returnDate,
+              today: todayStr,
+              proposedDate: proposedBestDate,
+              validationError,
+              naturalQuery,
+              isParsing,
+            }}
+            actions={{
+              onOrigin1Change: handleOrigin1Change,
+              onOrigin2Change: handleOrigin2Change,
+              onDestinationChange: handleDestinationChange,
+              onOutboundDateChange: handleOutboundDateChange,
+              onReturnDateChange: handleReturnDateChange,
+              onClearDates: () => {
+                setOutboundDate('');
+                setReturnDate('');
+              },
+              onApplyProposedDates: handleApplyProposedDates,
+              onLaunchSynchronizer: handleLaunchSynchronizer,
+              onNaturalQueryChange: setNaturalQuery,
+              onSubmitNaturalQuery: (event) => void handleParseQuery(event),
+            }}
+          />
 
-                {/* Traveler 2 Input */}
-                <div>
-                  <CityAutocomplete
-                    id="input-origin-2"
-                    label="Traveler 2 (Companion's Departure City)"
-                    icon={<Users className="w-3.5 h-3.5 text-orange-600" />}
-                    value={origin2}
-                    placeholder="e.g. Zagreb"
-                    datalistId="origin2-datalist"
-                    onChange={(val) => {
-                      setOrigin2(val);
-                      if (onSetTravelerOrigins) onSetTravelerOrigins(origin1, val);
-                      if (validationError) setValidationError(null);
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Destination & Flexible Date Selection */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-[#E8DACB]">
-                {/* Destination City Selection with Dropdown Menu */}
-                <div>
-                  <CityAutocomplete
-                    id="input-meeting-destination"
-                    label="Meeting Destination City"
-                    icon={<MapPin className="w-3.5 h-3.5 text-orange-600" />}
-                    value={customDestinationText}
-                    placeholder="e.g. Milan"
-                    datalistId="destinations-datalist"
-                    onChange={(val, cityItem) => {
-                      setCustomDestinationText(val);
-                      if (!val.trim()) {
-                        setSelectedCity('');
-                        if (onUpdateDestination) onUpdateDestination('', '');
-                      } else {
-                        const check = ((cityItem?.city || '') + ' ' + val).toLowerCase();
-                        const nextCity: DestinationCity =
-                          check.includes('rome') || check.includes('roma') || check.includes('fco')
-                            ? 'roma'
-                            : 'milano';
-                        setSelectedCity(nextCity);
-                        if (onUpdateDestination) onUpdateDestination(val, nextCity);
-                      }
-                      if (validationError) setValidationError(null);
-                    }}
-                  />
-                </div>
-
-                {/* Flexible Dates Selector - Any Month & Year */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-800 mb-1.5 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-orange-600" />
-                    Trip Dates (Any Month &amp; Year)
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-[11px] font-semibold text-stone-600 block mb-1">Departure:</span>
-                      <input
-                        id="input-departure-date"
-                        type="date"
-                        value={outboundDate}
-                        min={todayStr}
-                        placeholder="YYYY-MM-DD"
-                        onChange={(e) => {
-                          const newOut = e.target.value;
-                          setOutboundDate(newOut);
-                          if (returnDate && newOut >= returnDate) {
-                            const d = new Date(newOut);
-                            d.setDate(d.getDate() + 3);
-                            setReturnDate(d.toISOString().split('T')[0]);
-                          }
-                          if (validationError) setValidationError(null);
-                        }}
-                        className="w-full bg-[#FAF7F2] hover:bg-white focus:bg-white text-stone-900 border border-stone-300 rounded-xl px-2.5 py-2 text-xs sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-500"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[11px] font-semibold text-stone-600 block mb-1">Return:</span>
-                      <input
-                        id="input-return-date"
-                        type="date"
-                        value={returnDate}
-                        min={outboundDate || todayStr}
-                        placeholder="YYYY-MM-DD"
-                        onChange={(e) => {
-                          setReturnDate(e.target.value);
-                          if (validationError) setValidationError(null);
-                        }}
-                        className="w-full bg-[#FAF7F2] hover:bg-white focus:bg-white text-stone-900 border border-stone-300 rounded-xl px-2.5 py-2 text-xs sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Proposed Closest Best Date Banner (Triggers as user types the meeting destination) */}
-                  {proposedBestDate && (
-                    <div className="mt-2.5 p-3 rounded-xl bg-amber-50/90 border border-amber-200/90 text-stone-800 text-xs space-y-2 animate-in fade-in duration-200">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-2">
-                          <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-stone-900">
-                                Proposed closest date for {proposedBestDate.cityName}:
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                                Δ {proposedBestDate.gapFormatted} arrival gap
-                              </span>
-                            </div>
-                            <p className="text-stone-600 text-[11px] mt-0.5 leading-relaxed">
-                              📅 <strong>{proposedBestDate.outboundFormatted} ➔ {proposedBestDate.returnFormatted}</strong>
-                            </p>
-                            <p className="text-stone-500 text-[11px]">
-                              {proposedBestDate.highlight}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-amber-200/60">
-                        {outboundDate === proposedBestDate.outboundDate && returnDate === proposedBestDate.returnDate ? (
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" /> Proposed dates applied
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOutboundDate('');
-                                setReturnDate('');
-                              }}
-                              className="text-[11px] text-stone-500 hover:text-stone-800 underline cursor-pointer"
-                            >
-                              Clear (choose alone)
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              id="apply-proposed-dates-btn"
-                              type="button"
-                              onClick={() => {
-                                setOutboundDate(proposedBestDate.outboundDate);
-                                setReturnDate(proposedBestDate.returnDate);
-                                if (validationError) setValidationError(null);
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                            >
-                              <Sparkles className="w-3.5 h-3.5" />
-                              Apply proposed date ({proposedBestDate.outboundDate} ➔ {proposedBestDate.returnDate})
-                            </button>
-                            <span className="text-[11px] text-stone-500">
-                              or choose your own dates above
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Validation alert */}
-              {validationError && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>{validationError}</span>
-                </div>
-              )}
-
-              {/* Search Actions */}
-              <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-[#E8DACB]">
-                <div className="text-xs text-stone-600 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>Synchronizes arrival times within ~60–75 min &amp; matching return flights.</span>
-                </div>
-
-                <button
-                  id="home-find-flights-main-btn"
-                  type="button"
-                  onClick={handleLaunchSynchronizer}
-                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md hover:shadow-orange-500/20"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Find Synchronized Flights</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Natural language query alternative */}
-            <div className="mt-4 pt-3 border-t border-[#E8DACB]">
-              <p className="text-xs text-stone-600 font-medium mb-1.5 flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-orange-600" />
-                Or describe your trip in plain conversational language:
-              </p>
-              <form onSubmit={(e) => handleParseQuery(e)} className="relative">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={naturalQuery}
-                    onChange={(e) => setNaturalQuery(e.target.value)}
-                    placeholder="e.g. Find matching direct flights for our rendezvous weekend..."
-                    className="flex-1 bg-white text-stone-900 placeholder-stone-400 text-xs sm:text-sm px-3.5 py-2 rounded-xl border border-stone-300/80 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/20"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isParsing || !naturalQuery.trim()}
-                    className="px-4 py-2 rounded-xl bg-[#3D2E24] hover:bg-[#4D3A2E] disabled:opacity-50 text-amber-200 text-xs font-semibold cursor-pointer border border-[#594537] flex items-center gap-1.5 shrink-0 shadow-2xs"
-                  >
-                    {isParsing ? 'Searching...' : 'Send Request'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        {/* AI Parsed Result Summary Card (Appears after query or user action) */}
         {parsedResult && (
-          <div className="mt-8 relative z-10 max-w-3xl mx-auto bg-white text-stone-900 rounded-2xl p-5 sm:p-6 shadow-2xl border-2 border-amber-400 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="flex items-start justify-between gap-3 border-b border-stone-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
-                  ✨
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 text-emerald-800">
-                      Synchronized Match
-                    </span>
-                    <span className="text-xs font-bold text-stone-500">
-                      {parsedResult.destinationCity === 'milano' ? 'Milan, Italy' : 'Rome, Italy'}
-                    </span>
-                  </div>
-                  <h3 className="text-base sm:text-lg font-bold font-serif text-stone-900 mt-0.5">
-                    {parsedResult.summary}
-                  </h3>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-4">
-              {/* Outbound Sync Card */}
-              <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80">
-                <div className="flex items-center gap-2 text-xs font-bold text-emerald-900 mb-1">
-                  <PlaneLanding className="w-3.5 h-3.5 text-emerald-700" />
-                  Outbound Arrival ({parsedResult.outboundDate})
-                </div>
-                <div className="text-xs text-stone-700 space-y-1">
-                  <p>• <strong>{parsedResult.traveler1Origin}:</strong> Direct flight to {parsedResult.destinationCity === 'milano' ? 'Milan BGY/MXP' : 'Rome FCO'}</p>
-                  <p>• <strong>{parsedResult.traveler2Origin}:</strong> Direct flight to {parsedResult.destinationCity === 'milano' ? 'Milan BGY/MXP' : 'Rome FCO'}</p>
-                  <p className="text-emerald-800 font-semibold pt-0.5">⏱️ Both land within ~75 min of each other!</p>
-                </div>
-              </div>
-
-              {/* Return Sync Card */}
-              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-900 mb-1">
-                  <PlaneTakeoff className="w-3.5 h-3.5 text-amber-700" />
-                  Return Takeoff ({parsedResult.returnDate})
-                </div>
-                <div className="text-xs text-stone-700 space-y-1">
-                  <p>• <strong>➔ {parsedResult.traveler1Origin}:</strong> Return flight in the evening</p>
-                  <p>• <strong>➔ {parsedResult.traveler2Origin}:</strong> Return flight in the evening</p>
-                  <p className="text-amber-800 font-semibold pt-0.5">⏱️ Coordinated departures on the same date!</p>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-xs text-stone-600 bg-stone-50 p-3 rounded-xl border border-stone-200/70 leading-relaxed mb-4">
-              💡 <strong>Rendezvous Logistics:</strong> {parsedResult.whyThisTrip}
-            </p>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <div className="text-xs text-stone-500 font-medium">
-                Review complete flight numbers, baggage limits, and booking options:
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  id="home-open-outbound-btn"
-                  onClick={() => onStartPlanning(
-                    parsedResult.destinationCity, 
-                    parsedResult.outboundDate, 
-                    parsedResult.returnDate,
-                    parsedResult.traveler1Origin,
-                    parsedResult.traveler2Origin
-                  )}
-                  className="px-4 py-2 rounded-xl bg-[#2F241C] hover:bg-[#3D2E24] text-amber-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs border border-[#523E30]"
-                >
-                  <PlaneLanding className="w-3.5 h-3.5 text-emerald-400" />
-                  Step 1: View Outbound Flights
-                </button>
-                <button
-                  id="home-open-return-btn"
-                  onClick={() => {
-                    onStartPlanning(
-                      parsedResult.destinationCity, 
-                      parsedResult.outboundDate, 
-                      parsedResult.returnDate,
-                      parsedResult.traveler1Origin,
-                      parsedResult.traveler2Origin
-                    );
-                    onNavigateToTab('return');
-                  }}
-                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                >
-                  <PlaneTakeoff className="w-3.5 h-3.5" />
-                  Step 2: View Return Flights
-                </button>
-              </div>
-            </div>
-          </div>
+          <ParsedTripResultCard
+            result={parsedResult}
+            onOpenStep={(step) => handleOpenParsedStep(parsedResult, step)}
+          />
         )}
       </div>
-
-      {/* ======================= CURATED POPULAR RENDEZVOUS IDEAS ======================= */}
-      {origin1 && origin2 && (
-      <div className="space-y-4 mt-8 pt-8 border-t border-stone-200">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold font-serif text-stone-900 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-amber-600" />
-              Popular Meetup Ideas for {origin1.split(' ')[0]} &amp; {origin2.split(' ')[0]}
-            </h2>
-            <p className="text-xs sm:text-sm text-stone-500">
-              Pre-calculated flight combinations with tightest arrival coordination and seamless returns.
-            </p>
-          </div>
-
-          <button
-            id="home-compare-cities-link"
-            onClick={() => onNavigateToTab('compare')}
-            className="text-xs font-bold text-stone-700 hover:text-stone-900 flex items-center gap-1 cursor-pointer"
-          >
-            Compare Destination Details <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Package 1: Milan Golden Long Weekend */}
-          <div className="bg-white rounded-2xl border-2 border-amber-300/80 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
-            <div className="absolute top-0 right-0 bg-amber-500 text-stone-950 text-[10px] font-extrabold uppercase px-3 py-1 rounded-bl-xl tracking-wider">
-              ⭐ Top Direct Match
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-800 mb-1">
-                <MapPin className="w-3.5 h-3.5 text-amber-600" />
-                MILAN (MILANO) • 4-DAY LONG WEEKEND
-              </div>
-              <h3 className="text-lg font-bold font-serif text-stone-900">
-                The Milan &amp; Lake Como Rendezvous
-              </h3>
-              <p className="text-xs text-stone-500 mt-0.5">
-                📅 <strong>{proposedMilan.outboundFormatted} ➔ {proposedMilan.returnFormatted}</strong>
-              </p>
-
-              {/* Flight Sync Breakdown */}
-              <div className="mt-4 space-y-2.5 text-xs">
-                <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200">
-                  <div className="font-bold text-emerald-950 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <PlaneLanding className="w-3.5 h-3.5 text-emerald-600" /> Outbound ({proposedMilan.outboundFormatted.split(',')[0]}):
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
-                      1 hr 15 min Arrival Gap
-                    </span>
-                  </div>
-                  <div className="mt-1 text-stone-600 text-[11px] leading-relaxed">
-                    • <strong>{origin2.split(' ')[0]} ➔ BGY:</strong> Ryanair lands at 12:45<br />
-                    • <strong>{origin1.split(' ')[0]} ➔ BGY:</strong> Ryanair lands at 14:00<br />
-                    <span className="text-emerald-800 font-semibold">📍 Meet directly at Bergamo Airport arrivals cafe and take the direct express coach to Milano Centrale together!</span>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200">
-                  <div className="font-bold text-amber-950 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <PlaneTakeoff className="w-3.5 h-3.5 text-amber-600" /> Return ({proposedMilan.returnFormatted.split(',')[0]}):
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
-                      Evening Departures
-                    </span>
-                  </div>
-                  <div className="mt-1 text-stone-600 text-[11px] leading-relaxed">
-                    • <strong>BGY ➔ {origin2.split(' ')[0]}:</strong> Ryanair departs 17:50 ➔ arrives 19:05<br />
-                    • <strong>MXP ➔ {origin1.split(' ')[0]}:</strong> easyJet departs 18:50 ➔ arrives 20:20<br />
-                    <span className="text-amber-800 font-semibold">📍 Enjoy Sunday morning together, then head to your respective airport coaches at 15:00 from Milano Centrale!</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 pt-4 border-t border-stone-100 flex items-center justify-between">
-              <div>
-                <span className="text-xs text-stone-400">Total Roundtrip for Both:</span>
-                <div className="text-base font-extrabold text-stone-900">~€198 combined</div>
-              </div>
-
-              <button
-                id="select-milan-package-btn"
-                onClick={() => {
-                  setSelectedCity('milano');
-                  if (onSetTravelerOrigins) onSetTravelerOrigins(origin1, origin2);
-                  onStartPlanning('milano', proposedMilan.outboundDate, proposedMilan.returnDate, origin1, origin2);
-                }}
-                className="px-4 py-2 rounded-xl bg-[#2F241C] hover:bg-[#3D2E24] text-amber-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs border border-[#523E30]"
-              >
-                <span>Select &amp; View Flights</span>
-                <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
-              </button>
-            </div>
-          </div>
-
-          {/* Package 2: Rome Eternal City Weekend */}
-          <div className="bg-white rounded-2xl border border-stone-200 p-5 sm:p-6 shadow-xs flex flex-col justify-between hover:border-amber-300 transition-all">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-bold text-rose-800 mb-1">
-                <MapPin className="w-3.5 h-3.5 text-rose-600" />
-                ROME (ROMA) • 4-DAY LONG WEEKEND
-              </div>
-              <h3 className="text-lg font-bold font-serif text-stone-900">
-                The Roman Holiday Rendezvous
-              </h3>
-              <p className="text-xs text-stone-500 mt-0.5">
-                📅 <strong>{proposedRome.outboundFormatted} ➔ {proposedRome.returnFormatted}</strong>
-              </p>
-
-              {/* Flight Sync Breakdown */}
-              <div className="mt-4 space-y-2.5 text-xs">
-                <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200">
-                  <div className="font-bold text-emerald-950 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <PlaneLanding className="w-3.5 h-3.5 text-emerald-600" /> Outbound ({proposedRome.outboundFormatted.split(',')[0]}):
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
-                      Same Airport (FCO)
-                    </span>
-                  </div>
-                  <div className="mt-1 text-stone-600 text-[11px] leading-relaxed">
-                    • <strong>{origin2.split(' ')[0]} ➔ FCO:</strong> Ryanair lands at 14:15<br />
-                    • <strong>{origin1.split(' ')[0]} ➔ FCO:</strong> Ryanair lands at 15:20<br />
-                    <span className="text-emerald-800 font-semibold">📍 Meet directly at Rome Fiumicino Terminal 3 and ride the Leonardo Express train together to Roma Termini!</span>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200">
-                  <div className="font-bold text-amber-950 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <PlaneTakeoff className="w-3.5 h-3.5 text-amber-600" /> Return ({proposedRome.returnFormatted.split(',')[0]}):
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
-                      Depart from Same FCO
-                    </span>
-                  </div>
-                  <div className="mt-1 text-stone-600 text-[11px] leading-relaxed">
-                    • <strong>FCO ➔ {origin2.split(' ')[0]}:</strong> Ryanair departs 15:45 ➔ arrives 17:00<br />
-                    • <strong>FCO ➔ {origin1.split(' ')[0]}:</strong> Ryanair departs 16:30 ➔ arrives 18:25<br />
-                    <span className="text-amber-800 font-semibold">📍 Travel to FCO together on Sunday afternoon, check in together, and say goodbye at security!</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 pt-4 border-t border-stone-100 flex items-center justify-between">
-              <div>
-                <span className="text-xs text-stone-400">Total Roundtrip for Both:</span>
-                <div className="text-base font-extrabold text-stone-900">~€215 combined</div>
-              </div>
-
-              <button
-                id="select-rome-package-btn"
-                onClick={() => {
-                  setSelectedCity('roma');
-                  if (onSetTravelerOrigins) onSetTravelerOrigins(origin1, origin2);
-                  onStartPlanning('roma', proposedRome.outboundDate, proposedRome.returnDate, origin1, origin2);
-                }}
-                className="px-4 py-2 rounded-xl bg-[#2F241C] hover:bg-[#3D2E24] text-amber-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs border border-[#523E30]"
-              >
-                <span>Select &amp; View Flights</span>
-                <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
+
+      {origin1 && origin2 && (
+        <FeaturedRendezvousIdeas
+          traveler1Origin={origin1}
+          traveler2Origin={origin2}
+          proposedMilan={proposedMilan}
+          proposedRome={proposedRome}
+          onCompareDestinations={() => onNavigateToTab('compare')}
+          onSelectTrip={handleSelectSuggestedTrip}
+        />
       )}
 
       {/* ======================= HOW IT WORKS ======================= */}

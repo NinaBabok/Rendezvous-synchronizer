@@ -1,11 +1,8 @@
 import React from 'react';
 import { 
-  Sun, 
   Plane, 
   MapPin, 
-  Heart, 
   Check, 
-  X, 
   ArrowRight, 
   Sparkles,
   Users,
@@ -17,6 +14,7 @@ import { DestinationCity, SynchronizedMatch } from '../types';
 import { CITY_COMPARISON } from '../data/flightScheduleDatabase';
 import { POPULAR_CITIES } from '../data/cities';
 import { formatMinutesDiff } from '../utils';
+import { DestinationOptionCard } from './DestinationOptionCard';
 
 interface DestinationComparisonProps {
   currentDestination: DestinationCity;
@@ -25,7 +23,7 @@ interface DestinationComparisonProps {
   traveler2Origin?: string;
   selectedOutboundDate?: string;
   selectedReturnDate?: string;
-  currentOutboundMatch?: SynchronizedMatch;
+  currentOutboundMatch?: SynchronizedMatch | undefined;
   onSelectDestination: (city: DestinationCity, customName?: string) => void;
   onOpenConciergeWithContext: (prompt: string) => void;
   onGoToAirportsTab?: () => void;
@@ -48,11 +46,11 @@ export const DestinationComparison: React.FC<DestinationComparisonProps> = ({
 
   const t1Full = traveler1Origin?.trim() || 'Traveler 1 City';
   const t2Full = traveler2Origin?.trim() || 'Traveler 2 City';
-  const t1Short = t1Full.split(' (')[0];
-  const t2Short = t2Full.split(' (')[0];
+  const t1Short = t1Full.split(' (')[0] ?? t1Full;
+  const t2Short = t2Full.split(' (')[0] ?? t2Full;
 
   const rawDestName = destinationName?.trim() || (currentDestination === 'roma' ? 'Rome' : 'Milan');
-  const destShort = rawDestName.split(' (')[0];
+  const destShort = rawDestName.split(' (')[0] ?? rawDestName;
 
   // Look up city metadata in POPULAR_CITIES if user picked a custom city
   const matchedCityMeta = POPULAR_CITIES.find(
@@ -292,217 +290,40 @@ export const DestinationComparison: React.FC<DestinationComparisonProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Milan Card */}
-          <div className={`rounded-2xl border p-6 transition-all ${
-            currentDestination === 'milano' && !isCustomCity
-              ? 'bg-white border-amber-500/80 shadow-md ring-1 ring-amber-500/30'
-              : 'bg-white border-stone-200 hover:border-stone-300'
-          }`}>
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">
-                  {currentDestination === 'milano' && !isCustomCity ? '★ Your Selected Hub' : 'Hub Option A'}
-                </span>
-                <h3 className="text-2xl font-bold font-serif text-stone-900 mt-0.5">{milan.name}</h3>
-                <p className="text-xs text-stone-500 mt-1">{milan.tagline}</p>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold text-xl">
-                🇮🇹
-              </div>
-            </div>
-
-            {/* Quick Stats Grid */}
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className="p-3 bg-stone-50 rounded-xl border border-stone-100">
-                <div className="flex items-center gap-1.5 text-xs text-stone-500 font-medium">
-                  <Sun className="w-3.5 h-3.5 text-amber-600" />
-                  Typical Weather
-                </div>
-                <div className="text-sm font-bold text-stone-900 mt-1">{milan.weatherOctober.avgTemp}</div>
-                <div className="text-[11px] text-stone-500">{milan.weatherOctober.sunshineHours}h sun / day • Crisp</div>
-              </div>
-
-              <div className="p-3 bg-stone-50 rounded-xl border border-stone-100">
-                <div className="flex items-center gap-1.5 text-xs text-stone-500 font-medium">
-                  <Plane className="w-3.5 h-3.5 text-sky-600" />
-                  Airports
-                </div>
-                <div className="text-sm font-bold text-stone-900 mt-1">BGY, MXP, LIN</div>
-                <div className="text-[11px] text-stone-500">Ryanair + easyJet</div>
-              </div>
-            </div>
-
-            {/* Flight availability summary personalized */}
-            <div className="mt-5 p-3.5 bg-amber-50/60 rounded-xl border border-amber-200/60 text-xs text-stone-800 space-y-1.5">
-              <div className="font-bold text-amber-950 flex items-center gap-1.5">
-                <Plane className="w-3.5 h-3.5 text-amber-700" /> Route Fit for {t1Short} &amp; {t2Short}:
-              </div>
-              <p><strong>From {t2Full}:</strong> {milan.directFlightAvailability.fromZagreb}</p>
-              <p><strong>From {t1Full}:</strong> {milan.directFlightAvailability.fromToulouse}</p>
-              <p className="text-amber-900 font-medium pt-1 border-t border-amber-200/50">
-                💡 {milan.directFlightAvailability.verdict}
-              </p>
-            </div>
-
-            {/* Highlights */}
-            <div className="mt-5 space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
-                <Heart className="w-3.5 h-3.5 text-rose-500" /> Top Experiences Together in Milan:
-              </h4>
-              <ul className="text-xs text-stone-700 space-y-1.5 pl-1">
-                {milan.highlightsForMomTrip.map((h, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5"></span>
-                    <span>{h}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Pros & Cons */}
-            <div className="mt-5 pt-4 border-t border-stone-100 grid grid-cols-1 gap-2">
-              <div className="space-y-1">
-                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Pros:</span>
-                {milan.pros.map((pro, i) => (
-                  <div key={i} className="text-xs text-stone-700 flex items-start gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>{pro}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1 mt-2">
-                <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Cons:</span>
-                {milan.cons.map((con, i) => (
-                  <div key={i} className="text-xs text-stone-600 flex items-start gap-1.5">
-                    <X className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
-                    <span>{con}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-5 pt-4 border-t border-stone-100">
-              <button
-                id="choose-milano-decision-btn"
-                onClick={() => onSelectDestination('milano', 'Milan (Milano)')}
-                className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                  currentDestination === 'milano' && !isCustomCity
-                    ? 'bg-amber-500 text-stone-950 shadow-xs'
-                    : 'bg-stone-100 hover:bg-stone-200 text-stone-800'
-                }`}
-              >
-                <span>Select Milan for {t1Short} &amp; {t2Short}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Rome Card */}
-          <div className={`rounded-2xl border p-6 transition-all ${
-            currentDestination === 'roma' && !isCustomCity
-              ? 'bg-white border-amber-500/80 shadow-md ring-1 ring-amber-500/30'
-              : 'bg-white border-stone-200 hover:border-stone-300'
-          }`}>
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">
-                  {currentDestination === 'roma' && !isCustomCity ? '★ Your Selected Hub' : 'Hub Option B'}
-                </span>
-                <h3 className="text-2xl font-bold font-serif text-stone-900 mt-0.5">{rome.name}</h3>
-                <p className="text-xs text-stone-500 mt-1">{rome.tagline}</p>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold text-xl">
-                🏛️
-              </div>
-            </div>
-
-            {/* Quick Stats Grid */}
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className="p-3 bg-stone-50 rounded-xl border border-stone-100">
-                <div className="flex items-center gap-1.5 text-xs text-stone-500 font-medium">
-                  <Sun className="w-3.5 h-3.5 text-amber-600" />
-                  Typical Weather
-                </div>
-                <div className="text-sm font-bold text-stone-900 mt-1">{rome.weatherOctober.avgTemp}</div>
-                <div className="text-[11px] text-stone-500">{rome.weatherOctober.sunshineHours}h sun / day • Mild &amp; Warm</div>
-              </div>
-
-              <div className="p-3 bg-stone-50 rounded-xl border border-stone-100">
-                <div className="flex items-center gap-1.5 text-xs text-stone-500 font-medium">
-                  <Plane className="w-3.5 h-3.5 text-sky-600" />
-                  Airports
-                </div>
-                <div className="text-sm font-bold text-stone-900 mt-1">FCO (Fiumicino)</div>
-                <div className="text-[11px] text-stone-500">Same airport for both!</div>
-              </div>
-            </div>
-
-            {/* Flight availability summary personalized */}
-            <div className="mt-5 p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200/60 text-xs text-stone-800 space-y-1.5">
-              <div className="font-bold text-emerald-950 flex items-center gap-1.5">
-                <Plane className="w-3.5 h-3.5 text-emerald-700" /> Route Fit for {t1Short} &amp; {t2Short}:
-              </div>
-              <p><strong>From {t2Full}:</strong> {rome.directFlightAvailability.fromZagreb}</p>
-              <p><strong>From {t1Full}:</strong> {rome.directFlightAvailability.fromToulouse}</p>
-              <p className="text-emerald-900 font-medium pt-1 border-t border-emerald-200/50">
-                🌟 {rome.directFlightAvailability.verdict}
-              </p>
-            </div>
-
-            {/* Highlights */}
-            <div className="mt-5 space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
-                <Heart className="w-3.5 h-3.5 text-rose-500" /> Top Experiences Together in Rome:
-              </h4>
-              <ul className="text-xs text-stone-700 space-y-1.5 pl-1">
-                {rome.highlightsForMomTrip.map((h, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5"></span>
-                    <span>{h}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Pros & Cons */}
-            <div className="mt-5 pt-4 border-t border-stone-100 grid grid-cols-1 gap-2">
-              <div className="space-y-1">
-                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Pros:</span>
-                {rome.pros.map((pro, i) => (
-                  <div key={i} className="text-xs text-stone-700 flex items-start gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>{pro}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1 mt-2">
-                <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Cons:</span>
-                {rome.cons.map((con, i) => (
-                  <div key={i} className="text-xs text-stone-600 flex items-start gap-1.5">
-                    <X className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
-                    <span>{con}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-5 pt-4 border-t border-stone-100">
-              <button
-                id="choose-roma-decision-btn"
-                onClick={() => onSelectDestination('roma', 'Rome (Roma)')}
-                className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                  currentDestination === 'roma' && !isCustomCity
-                    ? 'bg-amber-500 text-stone-950 shadow-xs'
-                    : 'bg-stone-100 hover:bg-stone-200 text-stone-800'
-                }`}
-              >
-                <span>Select Rome for {t1Short} &amp; {t2Short}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+          {[
+            {
+              city: milan,
+              optionLabel: 'Hub Option A',
+              airportLabel: 'BGY, MXP, LIN',
+              airportNote: 'Ryanair + easyJet',
+              weatherNote: 'Crisp',
+              verdictIcon: '💡',
+            },
+            {
+              city: rome,
+              optionLabel: 'Hub Option B',
+              airportLabel: 'FCO (Fiumicino)',
+              airportNote: 'Same airport for both!',
+              weatherNote: 'Mild & Warm',
+              verdictIcon: '🌟',
+            },
+          ].map((option) => (
+            <DestinationOptionCard
+              key={option.city.city}
+              city={option.city}
+              isSelected={currentDestination === option.city.city && !isCustomCity}
+              optionLabel={option.optionLabel}
+              airportLabel={option.airportLabel}
+              airportNote={option.airportNote}
+              weatherNote={option.weatherNote}
+              verdictIcon={option.verdictIcon}
+              traveler1Short={t1Short}
+              traveler2Short={t2Short}
+              traveler1Full={t1Full}
+              traveler2Full={t2Full}
+              onSelect={onSelectDestination}
+            />
+          ))}
         </div>
       </div>
 

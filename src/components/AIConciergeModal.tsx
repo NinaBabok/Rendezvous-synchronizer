@@ -9,6 +9,8 @@ import {
   Compass
 } from 'lucide-react';
 import { AIConciergeMessage, DestinationCity } from '../types';
+import { isGroundingSource, isRecord } from '../utils';
+import { askGeminiConcierge } from '../gemini';
 
 interface AIConciergeModalProps {
   isOpen: boolean;
@@ -73,48 +75,48 @@ export const AIConciergeModal: React.FC<AIConciergeModalProps> = ({
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/ask-concierge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...messages, userMsg].map((m) => ({
-            role: m.sender === 'user' ? 'user' : 'assistant',
-            content: m.text,
-          })),
-          context: {
-            destinationCity,
-            destinationName,
-            traveler1Origin,
-            traveler2Origin,
-            selectedDate,
-          },
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
+      const data = await askGeminiConcierge(
+        [...messages, userMsg].map((message) => ({
+          role: message.sender === 'user' ? 'user' : 'assistant',
+          content: message.text,
+        })),
+        {
+          destinationCity,
+          destinationName,
+          traveler1Origin,
+          traveler2Origin,
+          selectedDate,
+        },
+      );
+      if (isRecord(data) && data.success === true && typeof data.reply === 'string') {
         const assistantMsg: AIConciergeMessage = {
           id: `assistant-${Date.now()}`,
           sender: 'assistant',
           text: data.reply,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          groundingSources: data.sources || [],
+          groundingSources: Array.isArray(data.sources)
+            ? data.sources.filter(isGroundingSource)
+            : [],
         };
         setMessages((prev) => [...prev, assistantMsg]);
       } else {
+        const errorMessage =
+          isRecord(data) && typeof data.error === 'string' ? data.error : 'Check API key';
         const errorMsg: AIConciergeMessage = {
           id: `err-${Date.now()}`,
           sender: 'assistant',
-          text: `I had trouble connecting to the flight assistant. (${data.error || 'Check API key'}). In the meantime, you can explore the synchronized flight options in the Flight Matches tab!`,
+          text: `I had trouble connecting to the flight assistant. (${errorMessage}). In the meantime, you can explore the synchronized flight options in the Flight Matches tab!`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, errorMsg]);
       }
-    } catch (err: any) {
+    } catch (error) {
       const errorMsg: AIConciergeMessage = {
         id: `err-${Date.now()}`,
         sender: 'assistant',
-        text: `Unable to reach the server. Please check your network connection and try again.`,
+        text: error instanceof Error
+          ? error.message
+          : 'Gemini request failed. Please check your connection and try again.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
