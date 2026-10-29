@@ -1,0 +1,6 @@
+{
+  "name": "Flight Rendezvous Synchronizer",
+  "description": "Find and synchronize matching flights from Zagreb and Toulouse to meet up in Milan or Rome in October.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
